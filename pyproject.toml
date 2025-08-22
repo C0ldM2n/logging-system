@@ -1,0 +1,17 @@
+[project]
+name = "log-system"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Kostiantyn Durlov", email = "68183908+C0ldM2n@users.noreply.github.com" }
+]
+requires-python = ">=3.12.11"
+dependencies = [
+    "opentelemetry-api>=1.36.0",
+    "opentelemetry-sdk>=1.36.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.36.0",
+    "opentelemetry-instrumentation-logging>=0.57b0",
+    "structlog>=25.4.0",
+    "grpcio>=1.74.0",
+    "opentelemetry-exporter-otlp>=1.36.0",
+]

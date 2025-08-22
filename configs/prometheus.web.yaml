@@ -1,0 +1,3 @@
+basic_auth_users:
+  "${PROMETHEUS_USER}": "$2a$12$yTzKCTGJRNuC47r0p1HLQeu6iexto1hsBjzTiYXeFO11J5q/j1M1G"
+  # "${PROMETHEUS_USER}": "${PROMETHEUS_PASSWORD}"

@@ -1,0 +1,7 @@
+# Говорим Kibana слушать все сетевые интерфейсы внутри контейнера
+server.host: "0.0.0.0"
+
+# --- Настройки подключения к Elasticsearch ---
+elasticsearch.hosts: ["https://elasticsearch:9200"]
+elasticsearch.username: "elastic"
+# Пароль мы продолжим передавать через переменную окружения, это безопасно и удобно
