@@ -1,64 +1,47 @@
+extensions:
+  basicauth/server:
+    htpasswd:
+      inline: |
+        ${env:OTEL_USERNAME}:${env:OTEL_PASSWORD}
+
+  health_check:
+
 receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: "0.0.0.0:4317"
-        # tls_settings:  # communication encryption
-        #   cert_file: /etc/otel/certs/server.crt
-        #   key_file: /etc/otel/certs/server.key
-
-        #   client_ca_file: /etc/otel/certs/ca.crt
-        #   client_auth: require_and_verify_client_cert
+        endpoint: 0.0.0.0:4317
+        auth:
+          authenticator: basicauth/server
       http:
-        endpoint: "0.0.0.0:4318"
-        # tls_settings:
-        #   cert_file: /etc/otel/certs/server.crt
-        #   key_file: /etc/otel/certs/server.key
+        endpoint: 0.0.0.0:4318
+        auth:
+          authenticator: basicauth/server
 
 processors:
   batch:
-  # attributes:
-  #   actions:
-  #       - key: http.request.header.authorization
-  #         action: delete  # redact sensitive headers
-  #       - key: user.email
-  #         action: delete  # remove user email PII
 
 exporters:
   otlp/jaeger:
-    endpoint: "jaeger:4317"
-    # tls:  # encrypt outgoing data
-    #   ca_file: /etc/otel/certs/backend-ca.crt
-    #   cert_file: /etc/otel/certs/client.crt
-    #   key_file: /etc/otel/certs/client.key
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
 
   prometheus:
-    endpoint: "0.0.0.0:9090"
-    # password: "${PROMETHEUS_PASSWORD}"
+    endpoint: 0.0.0.0:9090
 
   elasticsearch:
-    endpoints: [https://elasticsearch:9200]
-    user: "elastic"
-    password: "${ELASTIC_PASSWORD}"
-    logs_index: "otel-logs-%{+yyyy.MM.dd}"
-    tls:
-      ca_file: /etc/otelcol-contrib/certs/ca/ca.crt
+    endpoints: [http://elasticsearch:9200]
+    user: elastic
+    password: ${env:ELASTIC_PASSWORD}
+    logs_index: otel-logs-%{+yyyy.MM.dd}
 
   debug:
     verbosity: detailed
 
-# extensions:
-#   # avoid including high-permission extensions
-#   h_check:
-#   basicauth/client: # enable authentication
-#     # store credentials as environment variables
-#     client_auth:
-#       username: "${OTEL_USERNAME}"
-#       password: "${OTEL_PASSWORD}"
-
-#   extensions: [health_check, basicauth/client]
-
 service:
+  extensions: [health_check, basicauth/server]
+
   pipelines:
     traces:
       receivers: [otlp]

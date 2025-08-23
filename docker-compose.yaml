@@ -1,33 +1,39 @@
 services:
   elasticsearch:
     image: elasticsearch:9.1.2
+    restart: unless-stopped
     ports:
       - "9200:9200"
-      - "9300:9300"
+      # - "9300:9300"
     environment:
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      # - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      # - action.auto_create_index=otel-logs-*,otel-traces-*,otel-metrics-*
     volumes:
       - elastic_data:/usr/share/elasticsearch/data
-      - ./configs/elasticsearch.yaml:/usr/share/elasticsearch/config/elasticsearch.yaml
+      # - ./configs/elasticsearch.yaml:/usr/share/elasticsearch/config/elasticsearch.yaml
+    env_file:
+      - ./.env
     healthcheck:
-      test: ["CMD-SHELL", "curl -s --insecure --user elastic:${ELASTIC_PASSWORD} -X GET https://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      test: ["CMD-SHELL", "curl -s --insecure --user elastic:${ELASTIC_PASSWORD} -X GET http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 350s
+      start_period: 140s
     networks:
       - monitoring
 
   kibana:
     image: kibana:9.1.2
+    restart: unless-stopped
     ports:
       - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
-      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
     volumes:
       - ./configs/kibana.yaml:/usr/share/kibana/config/kibana.yaml:ro
+    env_file:
+      - ./.env
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -36,72 +42,94 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
     ports:
-      - "4317:4317"    # OTLP GRPC
-      - "4318:4318"    # OTLP HTTP
-      - "8889:8889"
-    environment:
-      - OTEL_USERNAME=${OTEL_USERNAME}
-      - OTEL_PASSWORD=${OTEL_PASSWORD}
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      # - PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD}
+      - "4317:4317"  # OTLP RPC
+      - "4318:4318"  # OTLP HTTP
+      - "8889:9090"  # Prometheus metrics
+    command:
+      - '--config=/etc/otelcol-contrib/config.yaml'
     volumes:
       - ./configs/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
+    env_file:
+      - ./.env
     depends_on:
       - elasticsearch
-      - jaeger
+      - jaeger-collector
     networks:
       - monitoring
 
   prometheus:
     image: prom/prometheus:latest
+    restart: unless-stopped
     ports:
-      - "9090:9090"
-    environment:
-      - PROMETHEUS_USER=${PROMETHEUS_USER}
-      - PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD}
-    volumes:
-      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yaml
-      - ./configs/prometheus.web.yaml:/etc/prometheus/web.yaml
+      - "9090:9090"  # metrics
     command:
       - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--web.config.file=/etc/prometheus/web.yaml'
+    volumes:
+      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yaml
+      - ./configs/prometheus.web.yaml:/etc/prometheus/web.yaml
+    env_file:
+      - ./.env
     networks:
       - monitoring
 
-  jaeger:
-    image: jaegertracing/jaeger:latest
+  jaeger-collector:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    # ports:
+    #   - "14250:14250"  # gRPC
+    #   - "14268:14268"  # HTTP
+    #   - "16686:16686"  # UI
+    command:
+      - 'collector'
+      - '--es.server-urls=http://elasticsearch:9200'
+      - '--es.username=elastic'
+      - '--es.password=${ELASTIC_PASSWORD}'
+      - '--collector.otlp.enabled=true'
+    env_file:
+      - ./.env
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - monitoring
+
+  jaeger-query:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
     ports:
-      - "16686:16686"   # UI
-      - "14250:14250"   # gRPC for agent
-      - "14268:14268"   # HTTP (optional)
-    environment:
-      - SPAN_STORAGE_TYPE=elasticsearch
-      - ELASTIC_SERVER_URLS=https://elasticsearch:9200
-      - ELASTIC_USERNAME=elastic
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      # - JAEGER_PASSWORD
+      - "16686:16686"
+    command:
+      - 'query'
+      - '--es.server-urls=http://elasticsearch:9200'
+      - '--es.username=elastic'
+      - '--es.password=${ELASTIC_PASSWORD}'
+    env_file: ./.env
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
     networks:
       - monitoring
 
-  # grafana:
-  #   image: grafana/grafana:latest
-  #   ports:
-  #     - "3000:3000"
-  #  environment:
-  #     # - GF_AUTH_ANONYMOUS_ENABLED=true
-  #     # - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
-  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-  #     - PROMETHEUS_USER=${PROMETHEUS_USER}
-  #     - PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD}
-  #   volumes:
-  #     - ./configs/grafana:/etc/grafana/provisioning/datasources
-  #   depends_on:
-  #     - prometheus
-  #     - jaeger
-  #   networks:
-  #     - monitoring
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - ./configs/grafana:/etc/grafana/provisioning/datasources
+    env_file:
+      - ./.env
+    depends_on:
+      - prometheus
+      - jaeger-query
+    networks:
+      - monitoring
 
 volumes:
   elastic_data:

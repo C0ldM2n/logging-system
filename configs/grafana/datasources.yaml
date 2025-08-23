@@ -4,10 +4,6 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
-    basicAuth: true
-    basicAuthUser: "${PROMETHEUS_USER}"
-    secureJsonData:
-      basicAuthPassword: "{PROMETHEUS_PASSWORD}"
 
   - name: Jaeger
     type: jaeger
