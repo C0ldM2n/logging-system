@@ -1,48 +1,127 @@
 services:
-  elasticsearch:
-    image: elasticsearch:9.1.2
-    restart: unless-stopped
-    ports:
-      - "9200:9200"
-      # - "9300:9300"
-    environment:
-      # - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
-      - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=false
-      - xpack.security.transport.ssl.enabled=false
-      # - action.auto_create_index=otel-logs-*,otel-traces-*,otel-metrics-*
+  # The 'setup' service runs a one-off script which initializes users inside
+  # Elasticsearch — such as 'logstash_internal' and 'kibana_system' — with the
+  # values of the passwords defined in the '.env' file. It also creates the
+  # roles required by some of these users.
+  #
+  # This task only needs to be performed once, during the *initial* startup of
+  # the stack. Any subsequent run will reset the passwords of existing users to
+  # the values defined inside the '.env' file, and the built-in roles to their
+  # default permissions.
+  #
+  # By default, it is excluded from the services started by 'docker compose up'
+  # due to the non-default profile it belongs to. To run it, either provide the
+  # '--profile=setup' CLI flag to Compose commands, or "up" the service by name
+  # such as 'docker compose up setup'.
+
+  setup:
+    profiles:
+      - setup
+    build:
+      context: setup/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    init: true
     volumes:
-      - elastic_data:/usr/share/elasticsearch/data
-      # - ./configs/elasticsearch.yaml:/usr/share/elasticsearch/config/elasticsearch.yaml
-    env_file:
-      - ./.env
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s --insecure --user elastic:${ELASTIC_PASSWORD} -X GET http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 140s
+      - ./setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./setup/lib.sh:/lib.sh:ro,Z
+      - ./setup/roles:/roles:ro,Z
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
+      MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+    network_mode: service:elasticsearch
+    depends_on:
+      - elasticsearch
+
+  # The 'kibana-genkeys' service runs a one-off command which generates and
+  # prints encryption keys for Kibana.
+  #
+  # By default, it is excluded from the services started by 'docker compose up'
+  # due to the non-default profile it belongs to. To run it, either provide the
+  # '--profile=setup' CLI flag to Compose commands, or "up" the service by name
+  # such as 'docker compose up kibana-genkeys'.
+
+  kibana-genkeys:
+    profiles:
+      - setup
+    build:
+      context: kibana/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    command:
+      - bin/kibana-encryption-keys
+      - generate
+    network_mode: none
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    volumes:
+      - ./elasticsearch/config/elasticsearch.yaml:/usr/share/elasticsearch/config/elasticsearch.yaml:ro,Z
+      - elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      node.name: elasticsearch
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      # Bootstrap password.
+      # Used to initialize the keystore during the initial startup of
+      # Elasticsearch. Ignored on subsequent runs.
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      # Use single node discovery in order to disable production mode and avoid bootstrap checks.
+      # see: https://www.elastic.co/docs/deploy-manage/deploy/self-managed/bootstrap-checks
+      discovery.type: single-node
     networks:
       - monitoring
+    restart: unless-stopped
+
+  logstash:
+      build:
+        context: logstash/
+        args:
+          ELASTIC_VERSION: ${ELASTIC_VERSION}
+      volumes:
+        - ./logstash/config/logstash.yaml:/usr/share/logstash/config/logstash.yaml:ro,Z
+        - ./logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+      ports:
+        - 5044:5044
+        - 50000:50000/tcp
+        - 50000:50000/udp
+        - 9600:9600
+      environment:
+        LS_JAVA_OPTS: -Xms256m -Xmx256m
+        LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      networks:
+        - monitoring
+      depends_on:
+        - elasticsearch
+      restart: unless-stopped
 
   kibana:
-    image: kibana:9.1.2
-    restart: unless-stopped
-    ports:
-      - "5601:5601"
+    build:
+      context: kibana/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
     volumes:
-      - ./configs/kibana.yaml:/usr/share/kibana/config/kibana.yaml:ro
-    env_file:
-      - ./.env
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
+      - ./kibana/config/kibana.yaml:/usr/share/kibana/config/kibana.yaml:ro,Z
+    ports:
+      - 5601:5601
+    environment:
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
     networks:
       - monitoring
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
-    restart: unless-stopped
     ports:
       - "4317:4317"  # OTLP RPC
       - "4318:4318"  # OTLP HTTP
@@ -50,14 +129,17 @@ services:
     command:
       - '--config=/etc/otelcol-contrib/config.yaml'
     volumes:
-      - ./configs/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
-    env_file:
-      - ./.env
+      - ./otel-collector/config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
+    environment:
+      OTEL_USERNAME: ${OTEL_USERNAME}
+      OTEL_PASSWORD: ${OTEL_PASSWORD}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    networks:
+      - monitoring
     depends_on:
       - elasticsearch
       - jaeger-collector
-    networks:
-      - monitoring
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
@@ -68,8 +150,8 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--web.config.file=/etc/prometheus/web.yaml'
     volumes:
-      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yaml
-      - ./configs/prometheus.web.yaml:/etc/prometheus/web.yaml
+      - ./prometheus/config/prometheus.yaml:/etc/prometheus/prometheus.yaml
+      - ./prometheus/config/prometheus.web.yaml:/etc/prometheus/web.yaml
     env_file:
       - ./.env
     networks:
@@ -84,9 +166,11 @@ services:
     #   - "16686:16686"  # UI
     command:
       - 'collector'
-      - '--es.server-urls=http://elasticsearch:9200'
+      - '--es.server-urls=https://elasticsearch:9200'
       - '--es.username=elastic'
       - '--es.password=${ELASTIC_PASSWORD}'
+      - '--es.tls.enabled=true'
+      - '--es.tls.insecure-skip-verify=true'
       - '--collector.otlp.enabled=true'
     env_file:
       - ./.env
@@ -103,9 +187,11 @@ services:
       - "16686:16686"
     command:
       - 'query'
-      - '--es.server-urls=http://elasticsearch:9200'
+      - '--es.server-urls=https://elasticsearch:9200'
       - '--es.username=elastic'
       - '--es.password=${ELASTIC_PASSWORD}'
+      - '--es.tls.enabled=true'
+      - '--es.tls.insecure-skip-verify=true'
     env_file: ./.env
     depends_on:
       elasticsearch:
@@ -122,7 +208,7 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     volumes:
-      - ./configs/grafana:/etc/grafana/provisioning/datasources
+      - ./grafana/config:/etc/grafana/provisioning/datasources
     env_file:
       - ./.env
     depends_on:
@@ -131,9 +217,9 @@ services:
     networks:
       - monitoring
 
-volumes:
-  elastic_data:
-
 networks:
   monitoring:
     driver: bridge
+
+volumes:
+  elasticsearch:

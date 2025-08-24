@@ -2,7 +2,7 @@ extensions:
   basicauth/server:
     htpasswd:
       inline: |
-        ${env:OTEL_USERNAME}:${env:OTEL_PASSWORD}
+        ${OTEL_USERNAME}:${OTEL_PASSWORD}
 
   health_check:
 
@@ -31,10 +31,12 @@ exporters:
     endpoint: 0.0.0.0:9090
 
   elasticsearch:
-    endpoints: [http://elasticsearch:9200]
+    endpoints: [https://elasticsearch:9200]
     user: elastic
-    password: ${env:ELASTIC_PASSWORD}
+    password: ${ELASTIC_PASSWORD}
     logs_index: otel-logs-%{+yyyy.MM.dd}
+    tls:
+      insecure: true
 
   debug:
     verbosity: detailed

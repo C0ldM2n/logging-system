@@ -1,5 +1,8 @@
-start:
-	python src/consumer_service.py
+setup:
+	docker compose up setup
+
+start-test:
+	python consumer_service.py
 
 setup-local:
 	uv venv
