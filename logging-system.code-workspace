@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			".idea": true,
+			".mypy_cache": true,
+			".ruff_cache": true,
+			".venv": true,
+			"**/__pycache__": true,
+			"**/*.pyc": true
+		},
+	}
+}

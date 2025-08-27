@@ -24,25 +24,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def setup_observability(service_name: str):
     # --- Новое: Чтение конфигурации из окружения ---
     # Получаем эндпоинт коллектора. По умолчанию - localhost для локальной разработки.
-    otel_collector_endpoint = os.getenv(
-        "OTEL_COLLECTOR_ENDPOINT", "localhost:4317"
-    )
+    otel_collector_endpoint = os.getenv("OTEL_COLLECTOR_ENDPOINT", "localhost:4317")
 
     # Получаем учетные данные для аутентификации
     otel_user = os.getenv("OTEL_USERNAME")
     otel_pass = os.getenv("OTEL_PASSWORD")
 
+    print("--------------" * 10)
+
     print("Username:", otel_user)
     print("Password:", otel_pass)
 
-    print((otel_pass + "") * 50)
+    print("--------------" * 10)
 
     resource = Resource(attributes={"service.name": service_name})
 
-        # --- Формирование заголовков для аутентификации ---
+    # --- Формирование заголовков для аутентификации ---
     headers = {}
     if otel_user and otel_pass:
         credentials = f"{otel_user}:{otel_pass}".encode("utf-8")
@@ -51,7 +52,9 @@ def setup_observability(service_name: str):
         # --- ВОТ ИСПРАВЛЕНИЕ: Ключ должен быть в нижнем регистре для gRPC Metadata ---
         headers["authorization"] = f"Basic {encoded_credentials}"
 
-        print("Observability: Используется аутентификация для подключения к OTel Collector.")
+        print(
+            "Observability: Используется аутентификация для подключения к OTel Collector."
+        )
     else:
         print("Observability: OTel Collector используется без аутентификации.")
 
@@ -59,14 +62,18 @@ def setup_observability(service_name: str):
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(
         BatchSpanProcessor(
-            OTLPSpanExporter(endpoint=otel_collector_endpoint, insecure=True, headers=headers)
+            OTLPSpanExporter(
+                endpoint=otel_collector_endpoint, insecure=True, headers=headers
+            )
         )
     )
     trace.set_tracer_provider(tracer_provider)
 
     # --- Метрики ---
     metric_reader = PeriodicExportingMetricReader(
-        OTLPMetricExporter(endpoint=otel_collector_endpoint, insecure=True, headers=headers)
+        OTLPMetricExporter(
+            endpoint=otel_collector_endpoint, insecure=True, headers=headers
+        )
     )
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
@@ -75,7 +82,9 @@ def setup_observability(service_name: str):
     logger_provider = LoggerProvider(resource=resource)
     logger_provider.add_log_record_processor(
         BatchLogRecordProcessor(
-            OTLPLogExporter(endpoint=otel_collector_endpoint, insecure=True, headers=headers)
+            OTLPLogExporter(
+                endpoint=otel_collector_endpoint, insecure=True, headers=headers
+            )
         )
     )
     otel_handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
@@ -105,9 +114,12 @@ def setup_observability(service_name: str):
     tracer = trace.get_tracer(f"{service_name}-tracer")
     meter = metrics.get_meter(f"{service_name}-meter")
 
-    print(f"Observability для сервиса '{service_name}' успешно настроено. Эндпоинт: {otel_collector_endpoint}")
+    print(
+        f"Observability для сервиса '{service_name}' успешно настроено. Эндпоинт: {otel_collector_endpoint}"
+    )
 
     return log, tracer, meter
+
 
 # ... (остальной код файла без изменений)
 def instrumented(tracer):

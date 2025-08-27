@@ -1,0 +1,217 @@
+services:
+  tls:
+    profiles:
+      - setup
+    build:
+      context: tls/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    user: root  # ensures we can write to the local tls/ directory.
+    init: true
+    volumes:
+      - ./tls/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./tls/instances.yml:/usr/share/elasticsearch/tls/instances.yml:ro,Z
+      - ./tls/certs:/usr/share/elasticsearch/tls/certs:z
+
+  setup:
+    profiles:
+      - setup
+    build:
+      context: setup/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    init: true
+    volumes:
+      - ./setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./setup/lib.sh:/lib.sh:ro,Z
+      - ./setup/roles:/roles:ro,Z
+      # (!) CA certificate. Generate using the 'tls' service.
+      - ./tls/certs/ca/ca.crt:/ca.crt:ro,z
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+    network_mode: service:elasticsearch
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # The 'kibana-genkeys' service runs a one-off command which generates and
+  # prints encryption keys for Kibana.
+  #
+  # By default, it is excluded from the services started by 'docker compose up'
+  # due to the non-default profile it belongs to. To run it, either provide the
+  # '--profile=setup' CLI flag to Compose commands, or "up" the service by name
+  # such as 'docker compose up kibana-genkeys'.
+  kibana-genkeys:
+    profiles:
+      - setup
+    build:
+      context: kibana/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    command:
+      - bin/kibana-encryption-keys
+      - generate
+    network_mode: none
+
+  elasticsearch:
+    build:
+      context: elasticsearch/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    volumes:
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - elasticsearch:/usr/share/elasticsearch/data:Z
+      # (!) TLS certificates. Generate using the 'tls' service.
+      - ./tls/certs/ca/ca.crt:/usr/share/elasticsearch/config/ca.crt:ro,z
+      - ./tls/certs/elasticsearch/elasticsearch.crt:/usr/share/elasticsearch/config/elasticsearch.crt:ro,z
+      - ./tls/certs/elasticsearch/elasticsearch.key:/usr/share/elasticsearch/config/elasticsearch.key:ro,z
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      node.name: elasticsearch
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      # Bootstrap password.
+      # Used to initialize the keystore during the initial startup of
+      # Elasticsearch. Ignored on subsequent runs.
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      # Use single node discovery in order to disable production mode and avoid bootstrap checks.
+      # see: https://www.elastic.co/docs/deploy-manage/deploy/self-managed/bootstrap-checks
+      discovery.type: single-node
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-u", "elastic:${ELASTIC_PASSWORD}", "https://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  kibana:
+    build:
+      context: kibana/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    volumes:
+      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+      # (!) TLS certificates. Generate using the 'tls' service.
+      - ./tls/certs/ca/ca.crt:/usr/share/kibana/config/ca.crt:ro,z
+      - ./tls/certs/kibana/kibana.crt:/usr/share/kibana/config/kibana.crt:ro,Z
+      - ./tls/certs/kibana/kibana.key:/usr/share/kibana/config/kibana.key:ro,Z
+    ports:
+      - 5601:5601
+    environment:
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+    networks:
+      - monitoring
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.72.0
+    ports:
+      - "16686:16686" # UI
+      - "14250:14250" # gRPC
+      - "14268:14268" # HTTP
+    environment:
+      # Используем Elasticsearch как хранилище для трейсов
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - ES_SERVER_URLS=https://elasticsearch:9200
+      - ES_USERNAME=elastic
+      - ES_PASSWORD=${ELASTIC_PASSWORD:-}
+      - ES_TLS_ENABLED=true
+      - ES_TLS_CA=/etc/jaeger/ca.crt
+    volumes:
+      - ./tls/certs/ca/ca.crt:/etc/jaeger/ca.crt:ro,z
+    networks:
+      - monitoring
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.config.file=/etc/prometheus/web.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-otlp-receiver'
+    volumes:
+      - ./prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro,Z
+      - ./prometheus/config/prometheus.web.yml:/etc/prometheus/web.yml:ro,Z
+      - prometheus_data:/prometheus:Z
+      - ./tls/certs/ca/ca.crt:/etc/prometheus/ca.crt:ro,z
+    ports:
+      - "9090:9090"
+    environment:
+      PROMETHEUS_USER: ${PROMETHEUS_USER:-}
+      PROMETHEUS_PASSWORD: ${PROMETHEUS_PASSWORD:-}
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    restart: unless-stopped
+
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.133.0
+    command:
+      - '--config=/etc/otelcol-contrib/config.yml'
+    volumes:
+      - ./otel-collector/config/otel-collector.yml:/etc/otelcol-contrib/config.yml:ro,Z
+      - ./tls/certs/ca/ca.crt:/etc/otelcol-contrib/ca.crt:ro,z
+    ports:
+      - "4317:4317"  # OTLP RPC
+      - "4318:4318"  # OTLP HTTP
+    environment:
+      OTEL_USERNAME: ${OTEL_USERNAME:-}
+      OTEL_PASSWORD: ${OTEL_PASSWORD:-}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+    networks:
+      - monitoring
+    depends_on:
+      jaeger:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:12.2.0-17142428006
+    volumes:
+      - ./grafana/config:/etc/grafana/provisioning/datasources:Z
+      - grafana_data:/var/lib/grafana:Z
+      - ./tls/certs/grafana/grafana.crt:/etc/grafana/grafana.crt:ro,z
+      - ./tls/certs/grafana/grafana.key:/etc/grafana/grafana.key:ro,z
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_SERVER_PROTOCOL: https
+      GF_SERVER_CERT_FILE: /etc/grafana/grafana.crt
+      GF_SERVER_CERT_KEY: /etc/grafana/grafana.key
+      PROMETHEUS_USER: ${PROMETHEUS_USER:-}
+      PROMETHEUS_PASSWORD: ${PROMETHEUS_PASSWORD:-}
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - jaeger
+    restart: unless-stopped
+
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  elasticsearch:
+  prometheus_data:
+  grafana_data:

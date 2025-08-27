@@ -23,20 +23,20 @@ processors:
 
 exporters:
   otlp/jaeger:
-    endpoint: jaeger:4317
+    endpoint: jaeger:14250
     tls:
       insecure: true
 
   prometheus:
-    endpoint: 0.0.0.0:9090
+    endpoint: 0.0.0.0:8080
 
   elasticsearch:
     endpoints: [https://elasticsearch:9200]
     user: elastic
     password: ${ELASTIC_PASSWORD}
-    logs_index: otel-logs-%{+yyyy.MM.dd}
+    logs_index: otel-logs
     tls:
-      insecure: true
+      ca_file: /etc/otelcol-contrib/ca.crt
 
   debug:
     verbosity: detailed
