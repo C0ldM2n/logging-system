@@ -4,7 +4,7 @@
 #
 server.name: kibana
 server.host: 0.0.0.0
-elasticsearch.hosts: [ https://elasticsearch:9200 ]
+elasticsearch.hosts: ["https://elasticsearch:${ELASTIC_PORT}"]
 
 monitoring.ui.container.elasticsearch.enabled: true
 monitoring.ui.container.logstash.enabled: true

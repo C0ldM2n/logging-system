@@ -2,16 +2,20 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "app/"
 		}
 	],
 	"settings": {
 		"files.exclude": {
-			".idea": true,
-			".mypy_cache": true,
-			".ruff_cache": true,
-			".venv": true,
+			"**/.idea": true,
+			"**/.mypy_cache": true,
+			"**/.ruff_cache": true,
+			"**/.venv": true,
 			"**/__pycache__": true,
-			"**/*.pyc": true
+			"**/*.pyc": true,
+			"app/": true,
 		},
 	}
 }

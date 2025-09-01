@@ -134,11 +134,3 @@ cython_debug/
 # *.code-workspace
 .vscode/
 */.vscode/
-
-# Log directories
-/logs/*
-*/logs/*
-
-# Playwright stuff
-*/browser/*
-*/browser/

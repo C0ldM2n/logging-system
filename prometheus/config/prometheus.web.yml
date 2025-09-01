@@ -1,2 +1,2 @@
 basic_auth_users:
-  prom_admin: '$2a$12$/9m/suEJGNhbCrIXIgSoOuNFEl6SN1hkj5SUxwsBkKffhdMTNyEvS'
+  prom_admin: "$2a$12$/9m/suEJGNhbCrIXIgSoOuNFEl6SN1hkj5SUxwsBkKffhdMTNyEvS"

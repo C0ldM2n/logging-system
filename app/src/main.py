@@ -4,7 +4,7 @@ import time
 from random import randint
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from observability_lib import instrumented, setup_observability
+from core.observability import instrumented, setup_observability
 
 log, tracer, meter = setup_observability(service_name="db-consumer-service")
 

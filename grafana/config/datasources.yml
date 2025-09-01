@@ -4,7 +4,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://prometheus:${PROMETHEUS_UI_PORT}
     isDefault: true
     basicAuth: true
     basicAuthUser: ${PROMETHEUS_USER}
@@ -15,5 +15,5 @@ datasources:
   - name: Jaeger
     type: jaeger
     access: proxy
-    url: http://jaeger:16686
+    url: http://jaeger:${JAEGER_UI_PORT}
     jsonData: {}

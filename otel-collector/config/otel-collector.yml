@@ -31,7 +31,7 @@ exporters:
     endpoint: 0.0.0.0:8080
 
   elasticsearch:
-    endpoints: [https://elasticsearch:9200]
+    endpoints: ["https://elasticsearch:${ELASTIC_PORT}"]
     user: elastic
     password: ${ELASTIC_PASSWORD}
     logs_index: otel-logs

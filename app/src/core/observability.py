@@ -1,8 +1,5 @@
-# observability_lib/__init__.py
-
 import functools
 import logging
-import os
 import base64  # <-- Новое: Импортируем base64 для кодирования
 import sys
 
@@ -20,25 +17,19 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Status, StatusCode
-from dotenv import load_dotenv
 
-load_dotenv()
+from config import settings
 
 
 def setup_observability(service_name: str):
-    # --- Новое: Чтение конфигурации из окружения ---
-    # Получаем эндпоинт коллектора. По умолчанию - localhost для локальной разработки.
-    otel_collector_endpoint = os.getenv("OTEL_COLLECTOR_ENDPOINT", "localhost:4317")
+    otel_collector_endpoint = settings.OTEL_COLLECTOR_ENDPOINT
 
-    # Получаем учетные данные для аутентификации
-    otel_user = os.getenv("OTEL_USERNAME")
-    otel_pass = os.getenv("OTEL_PASSWORD")
+    otel_user = settings.OTEL_USERNAME
+    otel_pass = settings.OTEL_PASSWORD
 
     print("--------------" * 10)
-
     print("Username:", otel_user)
     print("Password:", otel_pass)
-
     print("--------------" * 10)
 
     resource = Resource(attributes={"service.name": service_name})

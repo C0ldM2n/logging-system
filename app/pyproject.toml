@@ -1,0 +1,30 @@
+[project]
+name = "observability-lib"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "C0ldM2n",email = "68183908+C0ldM2n@users.noreply.github.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "opentelemetry-api (>=1.36.0,<2.0.0)",
+    "opentelemetry-sdk (>=1.36.0,<2.0.0)",
+    "opentelemetry-exporter-otlp-proto-grpc (>=1.36.0,<2.0.0)",
+    "opentelemetry-instrumentation-logging (>=0.57b0,<0.58)",
+    "structlog (>=25.4.0,<26.0.0)",
+    "grpcio (>=1.74.0,<2.0.0)",
+    "opentelemetry-exporter-otlp (>=1.36.0,<2.0.0)",
+    "pydantic (>=2.11.7,<3.0.0)",
+    "pydantic-settings (>=2.10.1,<3.0.0)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+ruff = "0.12.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
