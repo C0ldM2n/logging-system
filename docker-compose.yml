@@ -6,12 +6,12 @@ services:
       context: setup/
       args:
         ES_VERSION: ${ES_VERSION}
-    # init: true
+    init: true
     environment:
       ES_HOST: ${ES_HOST}
       ES_PORT: ${ES_PORT}
-      ES_PASSWORD: ${ES_PASSWORD}
       ES_URL: https://${ES_HOST}:${ES_PORT}
+      ES_PASSWORD: ${ES_PASSWORD}
 
       OTEL_WRITER_PASSWORD: ${OTEL_WRITER_PASSWORD}
     volumes:
@@ -36,8 +36,8 @@ services:
 
       ES_JAVA_OPTS: -Xms512m -Xmx512m
 
-      ES_PORT: ${ES_PORT}
-      ES_PASSWORD: ${ES_PASSWORD}
+      ELASTIC_PORT: ${ES_PORT}
+      ELASTIC_PASSWORD: ${ES_PASSWORD}
     volumes:
       - elasticsearch:/usr/share/elasticsearch/data
 
@@ -49,7 +49,7 @@ services:
     networks:
       - monitoring
     healthcheck:
-      test: ["CMD", "curl", "-k", "-u", "elastic:${ES_PASSWORD}", "https://localhost:${ES_PORT}/_cluster/health?wait_for_status=yellow&timeout=5s"]
+      test: ["CMD", "curl", "-k", "-u", "elastic:${ELASTIC_PASSWORD}", "https://localhost:${ELASTIC_PORT}/_cluster/health?wait_for_status=yellow&timeout=5s"]
       interval: 15s
       timeout: 10s
       retries: 10
