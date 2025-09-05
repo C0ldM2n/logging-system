@@ -1,0 +1,16 @@
+{
+    "cluster": [],
+    "indices": [
+        {
+            "names": [
+                "logs-*"
+            ],
+            "privileges": [
+                "create_index",
+                "write",
+                "create_doc",
+                "view_index_metadata"
+            ]
+        }
+    ]
+}

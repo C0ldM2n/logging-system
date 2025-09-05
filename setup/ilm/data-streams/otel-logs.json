@@ -1,0 +1,19 @@
+{
+    "index_template": {
+        "index_patterns": [
+            "logs-app.*-*"
+        ],
+        "data_stream": {},
+        "template": {
+            "settings": {
+                "index.lifecycle.name": "otel-logs-policy",
+                "index.codec": "best_compression",
+                "index.mapping.total_fields.limit": 2000
+            },
+            "mappings": {
+                "dynamic": true
+            }
+        },
+        "priority": 500
+    }
+}

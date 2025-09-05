@@ -1,6 +1,10 @@
-ARG ELASTIC_VERSION
+ARG ES_VERSION
 
-# https://www.docker.elastic.co/
-FROM docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-9.1.2}
+FROM docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION}
+
+USER 0
+RUN microdnf install --setopt=tsflags=nodocs -y openssl && \
+    microdnf clean all
+USER 1000:0
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -24,14 +24,13 @@ function suberr {
 
 # Poll the 'elasticsearch' service until it responds with HTTP code 200.
 function wait_for_elasticsearch {
-	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
-	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}' 'https://elasticsearch:9200/'
-		'--resolve' "elasticsearch:9200:${elasticsearch_host}" '--cacert' "$es_ca_cert"
+	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}' "${ES_URL}/"
+		"--resolve" "${ES_HOST}:9200${ES_PORT}ES_HOST}" "--cacert" "$es_ca_cert"
 		)
 
-	if [[ -n "${ELASTIC_PASSWORD:-}" ]]; then
-		args+=( '-u' "elastic:${ELASTIC_PASSWORD}" )
+	if [[ -n "${ES_PASSWORD}" ]]; then
+		args+=( '-u' "elastic:${ES_PASSWORD}" )
 	fi
 
 	local -i result=1
@@ -63,14 +62,13 @@ function wait_for_elasticsearch {
 
 # Poll the Elasticsearch users API until it returns users.
 function wait_for_builtin_users {
-	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
-	local -a args=( '-s' '-D-' '-m15' 'https://elasticsearch:9200/_security/user?pretty'
-		'--resolve' "elasticsearch:9200:${elasticsearch_host}" '--cacert' "$es_ca_cert"
+	local -a args=( '-s' '-D-' '-m15' "${ES_URL}/_security/user?pretty"
+		"--resolve" "${ES_HOST}:9200:${ES_HOST}" "--cacert" "$es_ca_cert"
 		)
 
-	if [[ -n "${ELASTIC_PASSWORD:-}" ]]; then
-		args+=( '-u' "elastic:${ELASTIC_PASSWORD}" )
+	if [[ -n "${ES_PASSWORD}" ]]; then
+		args+=( '-u' "elastic:${ES_PASSWORD}" )
 	fi
 
 	local -i result=1
@@ -114,15 +112,14 @@ function wait_for_builtin_users {
 function check_user_exists {
 	local username=$1
 
-	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"https://elasticsearch:9200/_security/user/${username}"
-		'--resolve' "elasticsearch:9200:${elasticsearch_host}" '--cacert' "$es_ca_cert"
+		"${ES_URL}/_security/user/${username}"
+		"--resolve" "${ES_HOST}:${ES_PORT}:${ES_HOST}" "--cacert" "$es_ca_cert"
 		)
 
-	if [[ -n "${ELASTIC_PASSWORD:-}" ]]; then
-		args+=( '-u' "elastic:${ELASTIC_PASSWORD}" )
+	if [[ -n "${ES_PASSWORD}" ]]; then
+		args+=( '-u' "elastic:${ES_PASSWORD}" )
 	fi
 
 	local -i result=1
@@ -151,18 +148,17 @@ function set_user_password {
 	local username=$1
 	local password=$2
 
-	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"https://elasticsearch:9200/_security/user/${username}/_password"
-		'--resolve' "elasticsearch:9200:${elasticsearch_host}" '--cacert' "$es_ca_cert"
+		"${ES_URL}/_security/user/${username}/_password"
+		"--resolve" "${ES_HOST}:9200:${ES_HOST}" "--cacert" "$es_ca_cert"
 		'-X' 'POST'
 		'-H' 'Content-Type: application/json'
 		'-d' "{\"password\" : \"${password}\"}"
 		)
 
-	if [[ -n "${ELASTIC_PASSWORD:-}" ]]; then
-		args+=( '-u' "elastic:${ELASTIC_PASSWORD}" )
+	if [[ -n "${ES_PASSWORD}" ]]; then
+		args+=( '-u' "elastic:${ES_PASSWORD}" )
 	fi
 
 	local -i result=1
@@ -186,18 +182,16 @@ function create_user {
 	local password=$2
 	local role=$3
 
-	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
-
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"https://elasticsearch:9200/_security/user/${username}"
-		'--resolve' "elasticsearch:9200:${elasticsearch_host}" '--cacert' "$es_ca_cert"
+		"${ES_URL}/_security/user/${username}"
+		"--resolve" "${ES_HOST}:${ES_PORT}:${ES_HOST}" "--cacert" "$es_ca_cert"
 		'-X' 'POST'
 		'-H' 'Content-Type: application/json'
 		'-d' "{\"password\":\"${password}\",\"roles\":[\"${role}\"]}"
 		)
 
-	if [[ -n "${ELASTIC_PASSWORD:-}" ]]; then
-		args+=( '-u' "elastic:${ELASTIC_PASSWORD}" )
+	if [[ -n "${ES_PASWORD}" ]]; then
+		args+=( '-u' "elastic:${ES_PASWORD}" )
 	fi
 
 	local -i result=1
@@ -220,18 +214,17 @@ function ensure_role {
 	local name=$1
 	local body=$2
 
-	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"https://elasticsearch:9200/_security/role/${name}"
-		'--resolve' "elasticsearch:9200:${elasticsearch_host}" '--cacert' "$es_ca_cert"
+		"${ES_URL}/_security/role/${name}"
+		"--resolve" "${ES_HOST}:9200:${ES_HOST}" "--cacert" "$es_ca_cert"
 		'-X' 'POST'
 		'-H' 'Content-Type: application/json'
 		'-d' "$body"
 		)
 
-	if [[ -n "${ELASTIC_PASSWORD:-}" ]]; then
-		args+=( '-u' "elastic:${ELASTIC_PASSWORD}" )
+	if [[ -n "${ES_PASWORD}" ]]; then
+		args+=( '-u' "elastic:${ES_PASWORD}" )
 	fi
 
 	local -i result=1

@@ -21,28 +21,60 @@ receivers:
 processors:
   batch:
 
+  attributes/logs_enrich:
+    actions:
+      - key: service.name
+        value: ${SERVICE_NAME}
+        action: upsert
+      - key: deployment.environment
+        value: ${ENVIRONMENT}
+        action: upsert
+      - key: data_stream.type
+        value: logs
+        action: upsert
+      - key: data_stream.dataset
+        value: app.${SERVICE_NAME}   # segmentation by service
+        action: upsert
+      - key: data_stream.namespace
+        value: ${ENVIRONMENT}
+        action: upsert
+
 exporters:
   otlp/jaeger:
-    endpoint: jaeger:14250
+    endpoint: jaeger:4317
     tls:
       insecure: true
 
   prometheus:
-    endpoint: 0.0.0.0:8080
+    endpoint: 0.0.0.0:9464
 
   elasticsearch:
-    endpoints: ["https://elasticsearch:${ELASTIC_PORT}"]
-    user: elastic
-    password: ${ELASTIC_PASSWORD}
-    logs_index: otel-logs
+    endpoint: ${ES_URL}
+    auth:
+      user: otlp_writer
+      password: ${ES_PASSWORD}
     tls:
       ca_file: /etc/otelcol-contrib/ca.crt
+    mapping:
+      mode: otel
+
+    # stability/performance
+    sending_queue:
+      enabled: true
+      queue_size: 8192         # for start; increase at peaks
+      num_consumers: 4         # 2–4 usually enough
+    retry_on_failure:
+      enabled: true
 
   debug:
     verbosity: detailed
 
 service:
   extensions: [health_check, basicauth/server]
+
+  telemetry:
+      metrics:
+        address: 0.0.0.0:8888
 
   pipelines:
     traces:
@@ -57,5 +89,5 @@ service:
 
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [attributes/logs_enrich, batch]
       exporters: [elasticsearch, debug]
