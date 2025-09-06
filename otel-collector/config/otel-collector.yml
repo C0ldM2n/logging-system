@@ -50,9 +50,8 @@ exporters:
 
   elasticsearch:
     endpoint: ${ES_URL}
-    auth:
-      user: otlp_writer
-      password: ${ES_PASSWORD}
+    user: otlp_writer
+    password: ${ES_PASSWORD}
     tls:
       ca_file: /etc/otelcol-contrib/ca.crt
     mapping:
@@ -63,8 +62,6 @@ exporters:
       enabled: true
       queue_size: 8192         # for start; increase at peaks
       num_consumers: 4         # 2–4 usually enough
-    retry_on_failure:
-      enabled: true
 
   debug:
     verbosity: detailed
@@ -74,7 +71,12 @@ service:
 
   telemetry:
       metrics:
-        address: 0.0.0.0:8888
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: '0.0.0.0'
+                  port: 8888
 
   pipelines:
     traces:

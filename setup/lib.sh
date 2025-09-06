@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-
-es_ca_cert="${SCRIPT_DIR}"/ca.crt
+es_ca_cert="${BASH_SOURCE[0]%/*}"/ca.crt
 
 # Log a message.
 log () {
@@ -261,7 +259,6 @@ ensure_role () {
 
 	return $result
 }
-
 
 
 es_api() {

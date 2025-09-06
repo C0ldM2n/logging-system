@@ -1,10 +1,10 @@
 PHONY: setup-logs rm-certs down
 
 setup-logs:
-	docker compose --profile setup run --rm -e MODE=tls setup
+	docker compose run --rm tls
 	docker compose up -d elasticsearch
-	docker compose --profile setup run --rm -e MODE=setup setup
-	docker compose up -d
+	docker compose run --rm setup
+	docker compose up
 
 rm-certs:
 	rm -r tls/certs/*
